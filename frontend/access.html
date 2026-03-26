@@ -1,0 +1,41 @@
+Console Logo APIs & Services
+<!DOCTYPE html>
+<html>
+  <body>
+    <input id="name" placeholder="Enter Name" />
+    <input id="email" type="email" placeholder="Enter Email" />
+    <button id="verify">Access Files</button>
+    <div id="fileList"></div>
+
+    <script>
+      const urlParams = new URLSearchParams(window.location.hash.slice(1));
+      const token = urlParams.get("token") || window.location.hash.slice(1); // From QR
+      let accessData;
+
+      try {
+        accessData = JSON.parse(atob(token)); // Decode (backend verifies real)
+      } catch {
+        alert("Invalid QR");
+      }
+
+      document.getElementById("verify").onclick = async () => {
+        const name = document.getElementById("name").value;
+        const email = document.getElementById("email").value;
+        const res = await fetch("/api/verify-access", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email }),
+        });
+        if (res.ok) {
+          const { files } = await res.json();
+          document.getElementById("fileList").innerHTML = files
+            .map(
+              (id) =>
+                `<a href="https://drive.google.com/file/d/${id}/view" target="_blank">File ${id}</a>`
+            )
+            .join("<br>");
+        } else alert("Access denied");
+      };
+    </script>
+  </body>
+</html>

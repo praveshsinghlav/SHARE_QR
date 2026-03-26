@@ -1,0 +1,423 @@
+;!function(){try { var e="undefined"!=typeof globalThis?globalThis:"undefined"!=typeof global?global:"undefined"!=typeof window?window:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&((e._debugIds|| (e._debugIds={}))[n]="cae1b584-69b3-eaee-7b0e-c69d07cf58e2")}catch(e){}}();
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,820308,775159,e=>{"use strict";var t,s,a=e.i(55956),r=((t={}).API="api",t.STORAGE="storage",t.AUTH="auth",t.QUERY_PERFORMANCE="query_performance",t.DATABASE="database",t);e.s(["Presets",()=>r],775159);var n=((s={}).LAST_10_MINUTES="Last 10 minutes",s.LAST_30_MINUTES="Last 30 minutes",s.LAST_60_MINUTES="Last 60 minutes",s.LAST_3_HOURS="Last 3 hours",s.LAST_24_HOURS="Last 24 hours",s.LAST_7_DAYS="Last 7 days",s.LAST_14_DAYS="Last 14 days",s.LAST_28_DAYS="Last 28 days",s);let o=[{text:"Last 10 minutes",calcFrom:()=>(0,a.default)().subtract(10,"minute").toISOString(),calcTo:()=>(0,a.default)().toISOString(),availableIn:["free","pro","team","enterprise","platform"]},{text:"Last 30 minutes",calcFrom:()=>(0,a.default)().subtract(30,"minute").toISOString(),calcTo:()=>(0,a.default)().toISOString(),availableIn:["free","pro","team","enterprise","platform"]},{text:"Last 60 minutes",calcFrom:()=>(0,a.default)().subtract(1,"hour").toISOString(),calcTo:()=>(0,a.default)().toISOString(),default:!0,availableIn:["free","pro","team","enterprise","platform"]},{text:"Last 3 hours",calcFrom:()=>(0,a.default)().subtract(3,"hour").toISOString(),calcTo:()=>(0,a.default)().toISOString(),availableIn:["free","pro","team","enterprise","platform"]},{text:"Last 24 hours",calcFrom:()=>(0,a.default)().subtract(1,"day").toISOString(),calcTo:()=>(0,a.default)().toISOString(),availableIn:["free","pro","team","enterprise","platform"]},{text:"Last 7 days",calcFrom:()=>(0,a.default)().subtract(7,"day").toISOString(),calcTo:()=>(0,a.default)().toISOString(),availableIn:["pro","team","enterprise"]},{text:"Last 14 days",calcFrom:()=>(0,a.default)().subtract(14,"day").toISOString(),calcTo:()=>(0,a.default)().toISOString(),availableIn:["team","enterprise"]},{text:"Last 28 days",calcFrom:()=>(0,a.default)().subtract(28,"day").toISOString(),calcTo:()=>(0,a.default)().toISOString(),availableIn:["team","enterprise"]}],i={iso_timestamp_start:o[0].calcFrom(),iso_timestamp_end:o[0].calcTo()},l=(e,t=!0)=>{if(0===e.length)return"";let s=e.map(e=>{let t=e.key.split("."),s=[t[t.length-2],t[t.length-1]].join("."),a=e.key.includes(".")?s:e.key,r=e.value.toString().includes('"')||e.value.toString().includes("'"),n=!isNaN(Number(e.value)),o=!n&&r?e.value:`'${e.value}'`,i=!n&&String(o).toLowerCase(),l=n?e.value:i;switch(e.compare){case"matches":return`REGEXP_CONTAINS(${a}, ${l})`;case"is":default:return`${a} = ${l}`;case"!=":return`${a} != ${l}`;case">=":return`${a} >= ${l}`;case"<=":return`${a} <= ${l}`;case">":return`${a} > ${l}`;case"<":return`${a} < ${l}`}}).filter(Boolean).join(" AND ");return""===s?"":t?"WHERE "+s:"AND "+s},c={[r.API]:{title:"API",queries:{totalRequests:{queryType:"logs",sql:e=>`
+        -- reports-api-total-requests
+        select
+          cast(timestamp_trunc(t.timestamp, hour) as datetime) as timestamp,
+          count(t.id) as count
+        FROM edge_logs t
+          cross join unnest(metadata) as m
+          cross join unnest(m.response) as response
+          cross join unnest(m.request) as request
+          cross join unnest(request.headers) as headers
+          ${l(e)}
+        GROUP BY
+          timestamp
+        ORDER BY
+          timestamp ASC`},topRoutes:{queryType:"logs",sql:e=>`
+        -- reports-api-top-routes
+        select
+          request.path as path,
+          request.method as method,
+          request.search as search,
+          response.status_code as status_code,
+          count(t.id) as count
+        from edge_logs t
+          cross join unnest(metadata) as m
+          cross join unnest(m.response) as response
+          cross join unnest(m.request) as request
+          cross join unnest(request.headers) as headers
+          ${l(e)}
+        group by
+          request.path, request.method, request.search, response.status_code
+        order by
+          count desc
+        limit 10
+        `},errorCounts:{queryType:"logs",sql:e=>`
+        -- reports-api-error-counts
+        select
+          cast(timestamp_trunc(t.timestamp, hour) as datetime) as timestamp,
+          count(t.id) as count
+        FROM edge_logs t
+          cross join unnest(metadata) as m
+          cross join unnest(m.response) as response
+          cross join unnest(m.request) as request
+          cross join unnest(request.headers) as headers
+        WHERE
+          response.status_code >= 400
+        ${l(e,!1)}
+        GROUP BY
+          timestamp
+        ORDER BY
+          timestamp ASC
+        `},topErrorRoutes:{queryType:"logs",sql:e=>`
+        -- reports-api-top-error-routes
+        select
+          request.path as path,
+          request.method as method,
+          request.search as search,
+          response.status_code as status_code,
+          count(t.id) as count
+        from edge_logs t
+          cross join unnest(metadata) as m
+          cross join unnest(m.response) as response
+          cross join unnest(m.request) as request
+          cross join unnest(request.headers) as headers
+        where
+          response.status_code >= 400
+        ${l(e,!1)}
+        group by
+          request.path, request.method, request.search, response.status_code
+        order by
+          count desc
+        limit 10
+        `},responseSpeed:{queryType:"logs",sql:e=>`
+        -- reports-api-response-speed
+        select
+          cast(timestamp_trunc(t.timestamp, hour) as datetime) as timestamp,
+          avg(response.origin_time) as avg
+        FROM
+          edge_logs t
+          cross join unnest(metadata) as m
+          cross join unnest(m.response) as response
+          cross join unnest(m.request) as request
+          cross join unnest(request.headers) as headers
+          ${l(e)}
+        GROUP BY
+          timestamp
+        ORDER BY
+          timestamp ASC
+      `},topSlowRoutes:{queryType:"logs",sql:e=>`
+        -- reports-api-top-slow-routes
+        select
+          request.path as path,
+          request.method as method,
+          request.search as search,
+          response.status_code as status_code,
+          count(t.id) as count,
+          avg(response.origin_time) as avg
+        from edge_logs t
+          cross join unnest(metadata) as m
+          cross join unnest(m.response) as response
+          cross join unnest(m.request) as request
+          cross join unnest(request.headers) as headers
+        ${l(e)}
+        group by
+          request.path, request.method, request.search, response.status_code
+        order by
+          avg desc
+        limit 10
+        `},networkTraffic:{queryType:"logs",sql:e=>`
+        -- reports-api-network-traffic
+        select
+          cast(timestamp_trunc(t.timestamp, hour) as datetime) as timestamp,
+          coalesce(
+            safe_divide(
+              sum(
+                cast(coalesce(headers.content_length, "0") as int64)
+              ),
+              1000000
+            ),
+            0
+          ) as ingress_mb,
+          coalesce(
+            safe_divide(
+              sum(
+                cast(coalesce(resp_headers.content_length, "0") as int64)
+              ),
+              1000000
+            ),
+            0
+          ) as egress_mb,
+        FROM
+          edge_logs t
+          cross join unnest(metadata) as m
+          cross join unnest(m.response) as response
+          cross join unnest(m.request) as request
+          cross join unnest(request.headers) as headers
+          cross join unnest(response.headers) as resp_headers
+          ${l(e)}
+        GROUP BY
+          timestamp
+        ORDER BY
+          timestamp ASC
+        `},requestsByCountry:{queryType:"logs",sql:e=>`
+        -- reports-api-requests-by-country
+        select
+          cf.country as country,
+          count(t.id) as count
+        from edge_logs t
+          cross join unnest(metadata) as m
+          cross join unnest(m.response) as response
+          cross join unnest(m.request) as request
+          cross join unnest(request.headers) as headers
+          cross join unnest(request.cf) as cf
+        where
+          cf.country is not null
+        ${l(e,!1)}
+        group by
+          cf.country
+        `}}},[r.AUTH]:{title:"",queries:{}},[r.STORAGE]:{title:"Storage",queries:{cacheHitRate:{queryType:"logs",sql:e=>`
+        -- reports-storage-cache-hit-rate
+SELECT
+  timestamp_trunc(timestamp, hour) as timestamp,
+  countif( h.cf_cache_status in ('HIT', 'STALE', 'REVALIDATED', 'UPDATING') ) as hit_count,
+  countif( h.cf_cache_status in ('MISS', 'NONE/UNKNOWN', 'EXPIRED', 'BYPASS', 'DYNAMIC') ) as miss_count
+from edge_logs f
+  cross join unnest(f.metadata) as m
+  cross join unnest(m.request) as r
+  cross join unnest(m.response) as res
+  cross join unnest(res.headers) as h
+where starts_with(r.path, '/storage/v1/object') and r.method = 'GET'
+  ${l(e,!1)}
+group by timestamp
+order by timestamp desc
+`},topCacheMisses:{queryType:"logs",sql:e=>`
+        -- reports-storage-top-cache-misses
+SELECT
+  r.path as path,
+  r.search as search,
+  count(id) as count
+from edge_logs f
+  cross join unnest(f.metadata) as m
+  cross join unnest(m.request) as r
+  cross join unnest(m.response) as res
+  cross join unnest(res.headers) as h
+where starts_with(r.path, '/storage/v1/object')
+  and r.method = 'GET'
+  and h.cf_cache_status in ('MISS', 'NONE/UNKNOWN', 'EXPIRED', 'BYPASS', 'DYNAMIC')
+  ${l(e,!1)}
+group by path, search
+order by count desc
+limit 12
+    `}}},[r.QUERY_PERFORMANCE]:{title:"Query performance",queries:{mostFrequentlyInvoked:{queryType:"db",sql:(e,t,s,a=!1,r=!1)=>`
+        -- reports-query-performance-most-frequently-invoked
+set search_path to public, extensions;
+
+select
+    auth.rolname,
+    statements.query,
+    statements.calls,
+    -- -- Postgres 13, 14, 15
+    statements.total_exec_time + statements.total_plan_time as total_time,
+    statements.min_exec_time + statements.min_plan_time as min_time,
+    statements.max_exec_time + statements.max_plan_time as max_time,
+    statements.mean_exec_time + statements.mean_plan_time as mean_time,
+    -- -- Postgres <= 12
+    -- total_time,
+    -- min_time,
+    -- max_time,
+    -- mean_time,
+    coalesce(statements.rows::numeric / nullif(statements.calls, 0), 0) as avg_rows,
+    statements.rows as rows_read,
+    case 
+      when (statements.shared_blks_hit + statements.shared_blks_read) > 0 
+      then round(
+        (statements.shared_blks_hit * 100.0) / 
+        (statements.shared_blks_hit + statements.shared_blks_read), 
+        2
+      )
+      else 0
+    end as cache_hit_rate${a?`,
+    case
+      when (lower(statements.query) like 'select%' or lower(statements.query) like 'with pgrst%')
+      then (
+        select json_build_object(
+          'has_suggestion', array_length(index_statements, 1) > 0,
+          'startup_cost_before', startup_cost_before,
+          'startup_cost_after', startup_cost_after,
+          'total_cost_before', total_cost_before,
+          'total_cost_after', total_cost_after,
+          'index_statements', index_statements
+        )
+        from index_advisor(statements.query)
+      )
+      else null
+    end as index_advisor_result`:""}
+  from pg_stat_statements as statements
+    inner join pg_authid as auth on statements.userid = auth.oid
+  ${t||""}
+  ${s||"order by statements.calls desc"}
+  limit 20`},mostTimeConsuming:{queryType:"db",sql:(e,t,s,a=!1,r=!1)=>`
+        -- reports-query-performance-most-time-consuming
+set search_path to public, extensions;
+
+select
+    auth.rolname,
+    statements.query,
+    statements.calls,
+    statements.total_exec_time + statements.total_plan_time as total_time,
+    statements.mean_exec_time + statements.mean_plan_time as mean_time,
+    coalesce(
+      ((statements.total_exec_time + statements.total_plan_time) /
+        nullif(sum(statements.total_exec_time + statements.total_plan_time) OVER(), 0)) *
+        100,
+      0
+    ) as prop_total_time${a?`,
+    case
+      when (lower(statements.query) like 'select%' or lower(statements.query) like 'with pgrst%')
+      then (
+        select json_build_object(
+          'has_suggestion', array_length(index_statements, 1) > 0,
+          'startup_cost_before', startup_cost_before,
+          'startup_cost_after', startup_cost_after,
+          'total_cost_before', total_cost_before,
+          'total_cost_after', total_cost_after,
+          'index_statements', index_statements
+        )
+        from index_advisor(statements.query)
+      )
+      else null
+    end as index_advisor_result`:""}
+  from pg_stat_statements as statements
+    inner join pg_authid as auth on statements.userid = auth.oid
+  ${t||""}
+  ${s||"order by total_time desc"}
+  limit 20`},slowestExecutionTime:{queryType:"db",sql:(e,t,s,a=!1,r=!1)=>`
+        -- reports-query-performance-slowest-execution-time
+set search_path to public, extensions;
+
+select
+    auth.rolname,
+    statements.query,
+    statements.calls,
+    -- -- Postgres 13, 14, 15
+    statements.total_exec_time + statements.total_plan_time as total_time,
+    statements.min_exec_time + statements.min_plan_time as min_time,
+    statements.max_exec_time + statements.max_plan_time as max_time,
+    statements.mean_exec_time + statements.mean_plan_time as mean_time,
+    -- -- Postgres <= 12
+    -- total_time,
+    -- min_time,
+    -- max_time,
+    -- mean_time,
+    coalesce(statements.rows::numeric / nullif(statements.calls, 0), 0) as avg_rows${a?`,
+    case
+      when (lower(statements.query) like 'select%' or lower(statements.query) like 'with pgrst%')
+      then (
+        select json_build_object(
+          'has_suggestion', array_length(index_statements, 1) > 0,
+          'startup_cost_before', startup_cost_before,
+          'startup_cost_after', startup_cost_after,
+          'total_cost_before', total_cost_before,
+          'total_cost_after', total_cost_after,
+          'index_statements', index_statements
+        )
+        from index_advisor(statements.query)
+      )
+      else null
+    end as index_advisor_result`:""}
+  from pg_stat_statements as statements
+    inner join pg_authid as auth on statements.userid = auth.oid
+  ${t||""}
+  ${s||"order by max_time desc"}
+  limit 20`},queryHitRate:{queryType:"db",sql:e=>`-- reports-query-performance-cache-and-index-hit-rate
+select
+    'index hit rate' as name,
+    (sum(idx_blks_hit)) / nullif(sum(idx_blks_hit + idx_blks_read),0) as ratio
+  from pg_statio_user_indexes
+  union all
+  select
+    'table hit rate' as name,
+    sum(heap_blks_hit) / nullif(sum(heap_blks_hit) + sum(heap_blks_read),0) as ratio
+  from pg_statio_user_tables;`},unified:{queryType:"db",sql:(e,t,s,a=!1,r=!1)=>`
+        -- reports-query-performance-unified
+        set search_path to public, extensions;
+
+        with base as (
+          select
+            auth.rolname,
+            statements.query,
+            statements.calls,
+            statements.total_exec_time + statements.total_plan_time as total_time,
+            statements.min_exec_time + statements.min_plan_time as min_time,
+            statements.max_exec_time + statements.max_plan_time as max_time,
+            statements.mean_exec_time + statements.mean_plan_time as mean_time,
+            coalesce(statements.rows::numeric / nullif(statements.calls, 0), 0) as avg_rows,
+            statements.rows as rows_read,
+            statements.shared_blks_hit as debug_hit,
+            statements.shared_blks_read as debug_read,
+            case
+              when (statements.shared_blks_hit + statements.shared_blks_read) > 0
+              then (statements.shared_blks_hit::numeric * 100.0) /
+                   (statements.shared_blks_hit + statements.shared_blks_read)
+              else 0
+            end as cache_hit_rate,
+            coalesce(
+              ((statements.total_exec_time + statements.total_plan_time) /
+                nullif(sum(statements.total_exec_time + statements.total_plan_time) OVER(), 0)) *
+                100,
+              0
+            ) as prop_total_time
+          from pg_stat_statements as statements
+            inner join pg_authid as auth on statements.userid = auth.oid
+          ${t||""}
+          ${s||"order by total_time desc"}
+          limit 50
+        ),
+        query_results as (
+          select
+            base.*${a?`,
+            case
+              when (lower(base.query) like 'select%' or lower(base.query) like 'with pgrst%')
+              then (
+                select json_build_object(
+                  'has_suggestion', array_length(index_statements, 1) > 0,
+                  'startup_cost_before', startup_cost_before,
+                  'startup_cost_after', startup_cost_after,
+                  'total_cost_before', total_cost_before,
+                  'total_cost_after', total_cost_after,
+                  'index_statements', index_statements
+                )
+                from index_advisor(base.query)
+              )
+              else null
+            end as index_advisor_result`:""}
+          from base
+        )
+        select *
+        from query_results
+        ${r&&a?"where (index_advisor_result->>'has_suggestion')::boolean = true":""}
+        ${s||"order by total_time desc"}
+        limit 20`},slowQueriesCount:{queryType:"db",sql:()=>`
+        -- reports-query-performance-slow-queries-count
+        set search_path to public, extensions;
+
+        -- Count of slow queries (> 1 second average)
+        SELECT count(*) as slow_queries_count
+        FROM pg_stat_statements 
+        WHERE statements.mean_exec_time > 1000;`},queryMetrics:{queryType:"db",sql:(e,t,s,a=!1,r=!1)=>`
+        -- reports-query-performance-metrics
+        set search_path to public, extensions;
+      
+        SELECT 
+          COALESCE(ROUND(AVG(statements.rows::numeric / NULLIF(statements.calls, 0)), 1), 0) as avg_rows_per_call,
+          COUNT(*) FILTER (WHERE statements.total_exec_time + statements.total_plan_time > 1000) as slow_queries,
+          COALESCE(
+            ROUND(
+              SUM(statements.shared_blks_hit) * 100.0 / 
+              NULLIF(SUM(statements.shared_blks_hit + statements.shared_blks_read), 0), 
+              2
+            ), 0
+          ) || '%' as cache_hit_rate
+        FROM pg_stat_statements as statements
+        WHERE statements.calls > 0
+        ${t||""}
+        ${s||""}`}}},[r.DATABASE]:{title:"database",queries:{largeObjects:{queryType:"db",sql:e=>`-- reports-database-large-objects
+SELECT
+        SCHEMA_NAME,
+        relname,
+        table_size
+      FROM
+        (SELECT
+          pg_catalog.pg_namespace.nspname AS SCHEMA_NAME,
+          relname,
+          pg_total_relation_size(pg_catalog.pg_class.oid) AS table_size
+        FROM pg_catalog.pg_class
+        JOIN pg_catalog.pg_namespace ON relnamespace = pg_catalog.pg_namespace.oid
+        ) t
+      WHERE SCHEMA_NAME NOT LIKE 'pg_%'
+      ORDER BY table_size DESC
+      LIMIT 5;`}}}};e.s(["DEFAULT_QUERY_PARAMS",0,i,"DEPRECATED_REPORTS",0,["total_realtime_ingress","total_rest_options_requests","total_auth_ingress","total_auth_get_requests","total_auth_post_requests","total_auth_patch_requests","total_auth_options_requests","total_storage_options_requests","total_storage_patch_requests","total_options_requests","total_rest_ingress","total_rest_get_requests","total_rest_post_requests","total_rest_patch_requests","total_rest_delete_requests","total_storage_get_requests","total_storage_post_requests","total_storage_delete_requests","total_auth_delete_requests","total_get_requests","total_patch_requests","total_post_requests","total_ingress","total_delete_requests"],"EDGE_FUNCTION_REGIONS",0,[{key:"ap-northeast-1",label:"Tokyo"},{key:"ap-northeast-2",label:"Seoul"},{key:"ap-south-1",label:"Mumbai"},{key:"ap-southeast-1",label:"Singapore"},{key:"ap-southeast-2",label:"Sydney"},{key:"ca-central-1",label:"Canada Central"},{key:"us-east-1",label:"N. Virginia"},{key:"us-west-1",label:"N. California"},{key:"us-west-2",label:"Oregon"},{key:"eu-central-1",label:"Frankfurt"},{key:"eu-west-1",label:"Ireland"},{key:"eu-west-2",label:"London"},{key:"eu-west-3",label:"Paris"},{key:"sa-east-1",label:"São Paulo"}],"LAYOUT_COLUMN_COUNT",0,2,"PRESET_CONFIG",0,c,"REPORTS_DATEPICKER_HELPERS",0,o,"REPORT_DATERANGE_HELPER_LABELS",()=>n,"generateRegexpWhere",0,l],820308)},749199,e=>{"use strict";var t=e.i(242882),s=e.i(820308),a=e.i(150671),r=e.i(714403),n=e.i(635494),o=e.i(189329);e.s(["default",0,({sql:e,params:i=s.DEFAULT_QUERY_PARAMS,where:l,orderBy:c})=>{let{data:u}=(0,n.useSelectedProjectQuery)(),m=(0,o.useDatabaseSelectorStateSnapshot)(),{data:d}=(0,a.useReadReplicasQuery)({projectRef:u?.ref}),_=(d||[]).find(e=>e.identifier===m.selectedDatabaseId)?.connectionString,h=m.selectedDatabaseId,p="function"==typeof e?e([]):e,{data:f,error:y,isPending:g,isRefetching:x,refetch:b}=(0,t.useQuery)({queryKey:["projects",u?.ref,"db",{...i,sql:p,identifier:h},l,c],queryFn:({signal:e})=>(0,r.executeSql)({projectRef:u?.ref,connectionString:_||u?.connectionString,sql:p},e).then(e=>e.result),enabled:!!p,refetchOnWindowFocus:!1,refetchOnReconnect:!1});return{error:y||("object"==typeof f?f?.error:""),data:f,isLoading:g,isRefetching:x,params:i,runQuery:b,resolvedSql:p}}])},536068,e=>{"use strict";let t=(0,e.i(388019).default)("ChartNoAxesColumn",[["line",{x1:"18",x2:"18",y1:"20",y2:"10",key:"1xfpm4"}],["line",{x1:"12",x2:"12",y1:"20",y2:"4",key:"be30l9"}],["line",{x1:"6",x2:"6",y1:"20",y2:"14",key:"1r4le6"}]]);e.s(["BarChart2",()=>t],536068)},799108,e=>{"use strict";var t=e.i(389959),s=e.i(837574),a=e.i(606331),r=e.i(767799),n=e.i(877591),o=e.i(447958),i=e.i(27086),l=e.i(177003),c=e.i(258337),u=["x1","y1","x2","y2","key"],m=["offset"];function d(e){return(d="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function _(e,t){var s=Object.keys(e);if(Object.getOwnPropertySymbols){var a=Object.getOwnPropertySymbols(e);t&&(a=a.filter(function(t){return Object.getOwnPropertyDescriptor(e,t).enumerable})),s.push.apply(s,a)}return s}function h(e){for(var t=1;t<arguments.length;t++){var s=null!=arguments[t]?arguments[t]:{};t%2?_(Object(s),!0).forEach(function(t){var a,r,n;a=e,r=t,n=s[t],(r=function(e){var t=function(e,t){if("object"!=d(e)||!e)return e;var s=e[Symbol.toPrimitive];if(void 0!==s){var a=s.call(e,t||"default");if("object"!=d(a))return a;throw TypeError("@@toPrimitive must return a primitive value.")}return("string"===t?String:Number)(e)}(e,"string");return"symbol"==d(t)?t:t+""}(r))in a?Object.defineProperty(a,r,{value:n,enumerable:!0,configurable:!0,writable:!0}):a[r]=n}):Object.getOwnPropertyDescriptors?Object.defineProperties(e,Object.getOwnPropertyDescriptors(s)):_(Object(s)).forEach(function(t){Object.defineProperty(e,t,Object.getOwnPropertyDescriptor(s,t))})}return e}function p(){return(p=Object.assign.bind()).apply(this,arguments)}function f(e,t){if(null==e)return{};var s,a,r=function(e,t){if(null==e)return{};var s={};for(var a in e)if(Object.prototype.hasOwnProperty.call(e,a)){if(t.indexOf(a)>=0)continue;s[a]=e[a]}return s}(e,t);if(Object.getOwnPropertySymbols){var n=Object.getOwnPropertySymbols(e);for(a=0;a<n.length;a++)s=n[a],!(t.indexOf(s)>=0)&&Object.prototype.propertyIsEnumerable.call(e,s)&&(r[s]=e[s])}return r}var y=function(e){var s=e.fill;if(!s||"none"===s)return null;var a=e.fillOpacity,r=e.x,n=e.y,o=e.width,i=e.height,l=e.ry;return t.default.createElement("rect",{x:r,y:n,ry:l,width:o,height:i,stroke:"none",fill:s,fillOpacity:a,className:"recharts-cartesian-grid-bg"})};function g(e,a){var r;if(t.default.isValidElement(e))r=t.default.cloneElement(e,a);else if((0,s.default)(e))r=e(a);else{var o=a.x1,i=a.y1,l=a.x2,c=a.y2,d=a.key,_=f(a,u),h=(0,n.filterProps)(_,!1),y=(h.offset,f(h,m));r=t.default.createElement("line",p({},y,{x1:o,y1:i,x2:l,y2:c,fill:"none",key:d}))}return r}function x(e){var s=e.x,a=e.width,r=e.horizontal,n=void 0===r||r,o=e.horizontalPoints;if(!n||!o||!o.length)return null;var i=o.map(function(t,r){return g(n,h(h({},e),{},{x1:s,y1:t,x2:s+a,y2:t,key:"line-".concat(r),index:r}))});return t.default.createElement("g",{className:"recharts-cartesian-grid-horizontal"},i)}function b(e){var s=e.y,a=e.height,r=e.vertical,n=void 0===r||r,o=e.verticalPoints;if(!n||!o||!o.length)return null;var i=o.map(function(t,r){return g(n,h(h({},e),{},{x1:t,y1:s,x2:t,y2:s+a,key:"line-".concat(r),index:r}))});return t.default.createElement("g",{className:"recharts-cartesian-grid-vertical"},i)}function v(e){var s=e.horizontalFill,a=e.fillOpacity,r=e.x,n=e.y,o=e.width,i=e.height,l=e.horizontalPoints,c=e.horizontal;if(!(void 0===c||c)||!s||!s.length)return null;var u=l.map(function(e){return Math.round(e+n-n)}).sort(function(e,t){return e-t});n!==u[0]&&u.unshift(0);var m=u.map(function(e,l){var c=u[l+1]?u[l+1]-e:n+i-e;if(c<=0)return null;var m=l%s.length;return t.default.createElement("rect",{key:"react-".concat(l),y:e,x:r,height:c,width:o,stroke:"none",fill:s[m],fillOpacity:a,className:"recharts-cartesian-grid-bg"})});return t.default.createElement("g",{className:"recharts-cartesian-gridstripes-horizontal"},m)}function S(e){var s=e.vertical,a=e.verticalFill,r=e.fillOpacity,n=e.x,o=e.y,i=e.width,l=e.height,c=e.verticalPoints;if(!(void 0===s||s)||!a||!a.length)return null;var u=c.map(function(e){return Math.round(e+n-n)}).sort(function(e,t){return e-t});n!==u[0]&&u.unshift(0);var m=u.map(function(e,s){var c=u[s+1]?u[s+1]-e:n+i-e;if(c<=0)return null;var m=s%a.length;return t.default.createElement("rect",{key:"react-".concat(s),x:e,y:o,width:c,height:l,stroke:"none",fill:a[m],fillOpacity:r,className:"recharts-cartesian-grid-bg"})});return t.default.createElement("g",{className:"recharts-cartesian-gridstripes-vertical"},m)}var E=function(e,t){var s=e.xAxis,a=e.width,r=e.height,n=e.offset;return(0,o.getCoordinatesOfGrid)((0,i.getTicks)(h(h(h({},l.CartesianAxis.defaultProps),s),{},{ticks:(0,o.getTicksOfAxis)(s,!0),viewBox:{x:0,y:0,width:a,height:r}})),n.left,n.left+n.width,t)},q=function(e,t){var s=e.yAxis,a=e.width,r=e.height,n=e.offset;return(0,o.getCoordinatesOfGrid)((0,i.getTicks)(h(h(h({},l.CartesianAxis.defaultProps),s),{},{ticks:(0,o.getTicksOfAxis)(s,!0),viewBox:{x:0,y:0,width:a,height:r}})),n.top,n.top+n.height,t)},O=[],j=[];function C(e){var n,o,i,l,u,m,_=(0,c.useChartWidth)(),f=(0,c.useChartHeight)(),g=(0,c.useOffset)(),C=h(h({},e),{},{stroke:null!=(n=e.stroke)?n:"#ccc",fill:null!=(o=e.fill)?o:"none",horizontal:null==(i=e.horizontal)||i,horizontalFill:null!=(l=e.horizontalFill)?l:j,vertical:null==(u=e.vertical)||u,verticalFill:null!=(m=e.verticalFill)?m:O,x:(0,r.isNumber)(e.x)?e.x:g.left,y:(0,r.isNumber)(e.y)?e.y:g.top,width:(0,r.isNumber)(e.width)?e.width:g.width,height:(0,r.isNumber)(e.height)?e.height:g.height}),N=C.x,T=C.y,A=C.width,w=C.height,k=C.syncWithTicks,R=C.horizontalValues,I=C.verticalValues,F=(0,c.useArbitraryXAxis)(),D=(0,c.useYAxisWithFiniteDomainOrRandom)();if(!(0,r.isNumber)(A)||A<=0||!(0,r.isNumber)(w)||w<=0||!(0,r.isNumber)(N)||N!==+N||!(0,r.isNumber)(T)||T!==+T)return null;var L=C.verticalCoordinatesGenerator||E,P=C.horizontalCoordinatesGenerator||q,$=C.horizontalPoints,M=C.verticalPoints;if((!$||!$.length)&&(0,s.default)(P)){var H=R&&R.length,B=P({yAxis:D?h(h({},D),{},{ticks:H?R:D.ticks}):void 0,width:_,height:f,offset:g},!!H||k);(0,a.warn)(Array.isArray(B),"horizontalCoordinatesGenerator should return Array but instead it returned [".concat(d(B),"]")),Array.isArray(B)&&($=B)}if((!M||!M.length)&&(0,s.default)(L)){var U=I&&I.length,Y=L({xAxis:F?h(h({},F),{},{ticks:U?I:F.ticks}):void 0,width:_,height:f,offset:g},!!U||k);(0,a.warn)(Array.isArray(Y),"verticalCoordinatesGenerator should return Array but instead it returned [".concat(d(Y),"]")),Array.isArray(Y)&&(M=Y)}return t.default.createElement("g",{className:"recharts-cartesian-grid"},t.default.createElement(y,{fill:C.fill,fillOpacity:C.fillOpacity,x:C.x,y:C.y,width:C.width,height:C.height,ry:C.ry}),t.default.createElement(x,p({},C,{offset:g,horizontalPoints:$,xAxis:F,yAxis:D})),t.default.createElement(b,p({},C,{offset:g,verticalPoints:M,xAxis:F,yAxis:D})),t.default.createElement(v,p({},C,{horizontalPoints:$})),t.default.createElement(S,p({},C,{verticalPoints:M})))}C.displayName="CartesianGrid",e.s(["CartesianGrid",()=>C])},870152,e=>{"use strict";var t=e.i(532480);e.s(["InfoIcon",()=>t.default])},834869,e=>{"use strict";let t=["#3ECF8E","#DA760B","#097c4f","#EDC35E","#65BCD9","#0063E8","#DB8DF9","#B616A6"],s=["#9FE8C7","#FFB885","#4BA67A","#F6D99F","#B2DCEC","#80B1F4","#EDC9FC","#DB8BD3"],a=["#3ECF8E","#A3FFC2","#DA760B","#EDD35E","#65BCD9","#0063E8","#DB8DF9","#B616A6"],r=["#2A5C3F","#1F3D2A","#5C3D0A","#5C5230","#2A3D45","#001F3D","#4A3D5C","#3D1F3A"],n=t,o=s;var i,l=((i={}).FULL="MMM D, YYYY, hh:mma",i.FULL_SECONDS="MMM D, hh:mm:ssa",i.DATE_ONLY="MMM D, YYYY",i);e.s(["CHART_COLORS",0,{TICK:"hsl(var(--background-overlay-hover))",AXIS:"hsl(var(--background-overlay-hover))",GREEN_1:"hsl(var(--brand-default))",GREEN_2:"hsl(var(--brand-500))",RED_1:"hsl(var(--destructive-default))",RED_2:"hsl(var(--destructive-500))",REFERENCE_LINE:"hsl(var(--foreground-muted))",REFERENCE_LINE_TEXT:"hsl(var(--foreground-muted))"},"DEFAULT_STACK_COLORS",0,["brand","slate","blue","yellow","indigo"],"DateTimeFormats",()=>l,"STACKED_CHART_COLORS",()=>n,"STACKED_CHART_FILLS",()=>o,"genStackColorScales",0,e=>e.map(e=>{let t={slate:11}[e]??9;return{lighter:`var(--colors-${e}${t-1})`,base:`var(--colors-${e}${t})`,darker:`var(--colors-${e}${t+1})`}}),"updateStackedChartColors",0,e=>{n=e?a:t,o=e?r:s}])},102291,e=>{"use strict";let t=(0,e.i(388019).default)("ChartNoAxesColumnIncreasing",[["line",{x1:"12",x2:"12",y1:"20",y2:"10",key:"1vz5eb"}],["line",{x1:"18",x2:"18",y1:"20",y2:"4",key:"cun8e5"}],["line",{x1:"6",x2:"6",y1:"20",y2:"16",key:"hq0ia6"}]]);e.s(["default",()=>t])},744507,526038,282237,940336,e=>{"use strict";var t=e.i(102291);e.s(["BarChartIcon",()=>t.default],744507);var s=e.i(388019);let a=(0,s.default)("GitCommitHorizontal",[["circle",{cx:"12",cy:"12",r:"3",key:"1v7zrd"}],["line",{x1:"3",x2:"9",y1:"12",y2:"12",key:"1dyftd"}],["line",{x1:"15",x2:"21",y1:"12",y2:"12",key:"oup4p8"}]]);e.s(["GitCommitHorizontalIcon",()=>a],526038);let r=(0,s.default)("SquareTerminal",[["path",{d:"m7 11 2-2-2-2",key:"1lz0vl"}],["path",{d:"M11 13h4",key:"1p7l4v"}],["rect",{width:"18",height:"18",x:"3",y:"3",rx:"2",ry:"2",key:"1m3agn"}]]);e.s(["SquareTerminal",()=>r],282237);var n=e.i(478902),o=e.i(55956),i=e.i(389959),l=e.i(751883),c=e.i(834869);let u=e=>String(e).includes("."),m=(e,t)=>{if(0===t)return String(Math.round(e));let s=1/Math.pow(10,t);if(e>0&&e<s)return`<${s.toFixed(t)}`;if(e<0&&e>-s)return`>-${s.toFixed(t)}`;if(!u(e))return e.toLocaleString()+"."+"0".repeat(t);{let[s,a]=String(e).split(".");return Number(s).toLocaleString()+"."+a.slice(0,t)}};function d({isPercentage:e,showMaxValue:t,yMaxFromVisible:s,maxAttributeKey:a,showMaxLine:r,data:n,visibleAttributeNames:o}){if(e&&!t)return[0,s];if(!a||!r)return["auto","auto"];let i=n.reduce((e,t)=>{let s=t[a];return"number"==typeof s?Math.max(e,s):e},0);return i<=0?["auto","auto"]:[0,Math.max(i,n.reduce((e,t)=>Math.max(e,o.reduce((e,s)=>{let a=t[s];return e+("number"==typeof a?a:0)},0)),0))]}e.s(["compactNumberFormatter",0,e=>new Intl.NumberFormat("en",{notation:"compact",maximumFractionDigits:1}).format(e),"computeYAxisDomain",()=>d,"formatPercentage",0,(e,t=2)=>{if(1e-6>Math.abs(e-100))return"100%";if(Number.isInteger(e))return`${e}%`;let s=m(e,t);if(s.startsWith("<")||s.startsWith(">"))return`${s}%`;if(s.includes(".")){let[e,a=""]=s.split(".");return`${e}.${a.padEnd(t,"0")}%`}return`${s}%`},"numberFormatter",0,(e,t=2)=>u(e)?m(e,t):e.toLocaleString(),"precisionFormatter",0,m,"timestampFormatter",0,(e,t=c.DateTimeFormats.FULL,s=!1)=>s?o.default.utc(e).format(t):(0,o.default)(e).format(t),"useChartSize",0,(e="normal",t={tiny:76,small:96,normal:160,large:280})=>{let s=t[e];return{Container:(0,i.useMemo)(()=>({className:e,children:t})=>(0,n.jsx)(l.ResponsiveContainer,{className:e,height:s,minHeight:s,width:"100%",children:t}),[e]),minHeight:s}},"useStacked",0,({data:e,xAxisKey:t,yAxisKey:s,stackKey:a,variant:r="values"})=>{let n=(0,i.useMemo)(()=>e?Object.entries(e.reduce((e,r)=>{let n=r[t],o=r[s],i=r[a];return e[n]||(e[n]={}),e[n][i]=o,e},{})).map(([e,s])=>({...s,[t]:Number.isNaN(Number(e))?e:Number(e)})):[],[JSON.stringify(e)]),o=(0,i.useMemo)(()=>Object.keys(n[0]||{}).filter(e=>e!==t&&e!==s).sort(),[JSON.stringify(n[0]||{})]),l=(0,i.useMemo)(()=>{if("percentages"===r)return n.map(e=>{let t=Object.entries(e),s=t.filter(([e,t])=>o.includes(e)).reduce((e,[t,s])=>e+s,0);return t.reduce((e,[t,a])=>o.includes(t)?{...e,[t]:0!==a?a/s:0}:{...e,[t]:a},{})})},[JSON.stringify(n)]);return{dataKeys:o,stackedData:n,percentagesStackedData:l}}],940336)},150401,e=>{"use strict";var t=e.i(389959);let s="supabase-chart-hover-sync-enabled",a="supabase-chart-tooltip-sync-enabled",r={hoveredIndex:null,hoveredChart:null,syncHover:!0,syncTooltip:!0},n=new Set;try{{let e=localStorage.getItem(s),t=localStorage.getItem(a);null!==e&&(r.syncHover=JSON.parse(e)),null!==t&&(r.syncTooltip=JSON.parse(t))}}catch(e){console.warn("Failed to load chart sync settings from localStorage:",e)}function o(e){let t=r;if(r={...r,...e},void 0!==e.syncHover)try{localStorage.setItem(s,JSON.stringify(r.syncHover))}catch(e){console.warn("Failed to save chart hover sync setting to localStorage:",e)}if(void 0!==e.syncTooltip)try{localStorage.setItem(a,JSON.stringify(r.syncTooltip))}catch(e){console.warn("Failed to save chart tooltip sync setting to localStorage:",e)}JSON.stringify(t)!==JSON.stringify(r)&&n.forEach(e=>e(r))}function i(e){let[s,a]=(0,t.useState)(r);(0,t.useEffect)(()=>{let e=e=>{a(e)};return n.add(e),()=>{n.delete(e)}},[]);let i=(0,t.useCallback)(t=>{r.syncHover?o({hoveredIndex:t,hoveredChart:null!==t?e:null}):a(s=>({...s,hoveredIndex:t,hoveredChart:null!==t?e:null}))},[e]),l=(0,t.useCallback)(()=>{r.syncHover?o({hoveredIndex:null,hoveredChart:null}):a(e=>({...e,hoveredIndex:null,hoveredChart:null}))},[]),c=(0,t.useCallback)(e=>{o({syncHover:e,...!1===e&&{syncTooltip:!1}})},[]),u=(0,t.useCallback)(e=>{o({syncTooltip:e,...!0===e&&{syncHover:!0}})},[]),m=s.hoveredChart===e,d=s.syncHover&&null!==s.hoveredChart&&!m;return{hoveredIndex:d||m?s.hoveredIndex:null,syncHover:s.syncHover,syncTooltip:s.syncTooltip,hoveredChart:s.hoveredChart,setHover:i,clearHover:l,setSyncHover:c,setSyncTooltip:u,isHovered:null!==s.hoveredIndex&&(m||d),isCurrentChart:m}}e.s(["useChartHoverState",()=>i])},414833,682679,e=>{"use strict";var t=e.i(478902),s=e.i(536068),a=e.i(843778);e.i(128328);var r=e.i(158639),n=e.i(215312),o=e.i(55956),i=e.i(48189),l=e.i(787845),c=e.i(744507),u=e.i(526038),m=e.i(870152),d=e.i(282237),_=e.i(645388),h=e.i(389959),p=e.i(587433),f=e.i(252387),y=e.i(940336),g=e.i(150401);let x=({format:e,highlightedValue:s,highlightedLabel:x,hideHighlightedValue:b=!1,hideHighlightedLabel:v=!1,hideHighlightArea:S=!1,title:E,minimalHeader:q=!1,hideChartType:O=!1,chartStyle:j="bar",onChartStyleChange:C,showMaxValue:N=!1,setShowMaxValue:T,docsUrl:A,syncId:w,data:k,xAxisKey:R,yAxisKey:I,xAxisIsDate:F=!0,displayDateInUtc:D,customDateFormat:L,valuePrecision:P=2,shouldFormatBytes:$=!1,isNetworkChart:M=!1,attributes:H,sql:B,titleTooltip:U,showNewBadge:Y})=>{let{ref:z}=(0,r.useParams)(),{hoveredIndex:G,isHovered:W}=(0,g.useChartHoverState)(w||"default"),[K,V]=(0,h.useState)(s),[J,Q]=(0,h.useState)(x);(0,h.useEffect)(()=>{if(w&&null!==G&&W&&k&&R&&I){let e=k[G];if(e){let t=e[I];if(H&&H.length>1){let s=H?.filter(e=>e.omitFromTotal||e.isMaxValue||"reference-line"===e.provider)?.map(e=>e.attribute)??[];t=Object.entries(e).filter(([e,t])=>"number"==typeof t&&"timestamp"!==e&&"period_start"!==e&&!s.includes(e)&&H.some(t=>t.attribute===e&&!1!==t.enabled)).reduce((e,[t,s])=>e+s,0)}V(t);let s=x;if(F&&e[R]){let t;s=(t=e[R],D?(0,o.default)(t).utc():(0,o.default)(t)).format(L||"YYYY-MM-DD HH:mm:ss")}else e[R]&&(s=e[R]);Q(s)}}else V(s),Q(x)},[G,W,w,k,R,I,F,D,L,s,x,H]);let X=(0,t.jsxs)("div",{className:"flex flex-row items-center gap-x-2",children:[(0,t.jsxs)("div",{className:"flex flex-row items-center gap-x-2",children:[(0,t.jsx)("h3",{className:"text-foreground-lighter "+(q?"text-xs":"text-sm"),children:E}),U&&(0,t.jsx)(f.InfoTooltip,{children:U})]}),A&&(0,t.jsx)(n.ButtonTooltip,{type:"text",className:"px-1",asChild:!0,tooltip:{content:{side:"top",text:"Read docs"}},children:(0,t.jsx)(_.default,{href:A,target:"_blank",children:(0,t.jsx)(m.InfoIcon,{className:"w-4 h-4 text-foreground-lighter"})})})]}),Z=(0,t.jsx)("h4",{className:`text-foreground text-xl font-normal ${q?"text-base":"text-2xl"}`,children:void 0!==K&&(t=>{if("number"!=typeof t)return t;if("function"==typeof e)return e(t);if($){let e=M?Math.abs(t):t;return(0,i.formatBytes)(e,P)}if("%"===e)return(0,y.formatPercentage)(t,P);let s=(0,y.numberFormatter)(t,P);return"string"==typeof e&&e?`${s} ${e}`:s})(K)}),ee=(0,t.jsx)("h4",{className:"text-foreground-lighter text-xs",children:J});if(q)return(0,t.jsxs)("div",{className:(0,a.cn)("flex flex-row items-center gap-x-4",S&&"hidden"),style:{minHeight:"1.8rem"},children:[E&&X,(0,t.jsxs)("div",{className:"flex flex-row items-baseline gap-x-2",children:[void 0!==s&&!b&&Z,!v&&ee]})]});let et=void 0!==s&&!b;return(0,t.jsxs)("div",{className:(0,a.cn)("flex-grow flex justify-between items-start min-h-16",S&&"hidden"),children:[(0,t.jsxs)("div",{className:"flex flex-col",children:[(0,t.jsxs)("div",{className:"flex items-center gap-2",children:[E&&X,Y&&(0,t.jsx)(p.Badge,{variant:"success",children:"New"})]}),(0,t.jsxs)("div",{className:"h-4",children:[et&&Z,!v&&ee]})]}),(0,t.jsxs)("div",{className:"flex items-center gap-2",children:[B?(0,t.jsx)(n.ButtonTooltip,{type:"default",className:"px-1.5",asChild:!0,tooltip:{content:{side:"top",text:"Open in Log Explorer"}},children:(0,t.jsx)(_.default,{href:`/project/${z}/logs/explorer?q=${encodeURIComponent(B)}`,children:(0,t.jsx)(d.SquareTerminal,{className:"w-4 h-4 text-foreground-lighter"})})}):null,!O&&C&&(0,t.jsx)(n.ButtonTooltip,{type:"default",className:"px-1.5",icon:"bar"===j?(0,t.jsx)(l.Activity,{}):(0,t.jsx)(c.BarChartIcon,{}),onClick:()=>C("bar"===j?"line":"bar"),tooltip:{content:{side:"top",text:`View as ${"bar"===j?"line chart":"bar chart"}`}}}),T&&(0,t.jsx)(n.ButtonTooltip,{type:N?"default":"dashed",className:"px-1.5",icon:(0,t.jsx)(u.GitCommitHorizontalIcon,{className:N?"text-foreground-light":"text-foreground-lighter"}),onClick:()=>T(!N),tooltip:{content:{side:"top",text:`${N?"Hide":"Show"} limit`}}})]})]})};e.s(["ChartHeader",0,x],682679),e.s(["default",0,({attribute:e,message:r="No data to show",description:n,format:o,className:i="",size:l,isFullHeight:c=!1,titleTooltip:u,hideTotalPlaceholder:m=!1})=>{let{minHeight:d}=(0,y.useChartSize)(l);return(0,t.jsxs)("div",{className:(0,a.cn)(c&&"h-full"),children:[void 0!==e&&(0,t.jsx)(x,{title:e,format:o,highlightedValue:m?void 0:0,titleTooltip:u}),(0,t.jsxs)("div",{className:(0,a.cn)("border-control flex flex-grow w-full flex-col items-center justify-center space-y-2 border border-dashed text-center",c&&"h-full",i),style:{minHeight:d+20},children:[(0,t.jsx)(s.BarChart2,{size:20,className:"text-border-stronger"}),(0,t.jsxs)("div",{className:"px-1",children:[(0,t.jsx)("p",{className:"text-foreground-light text-xs",children:r}),n&&(0,t.jsx)("p",{className:"text-foreground-lighter text-xs",children:n})]})]})]})}],414833)}]);
+
+//# debugId=cae1b584-69b3-eaee-7b0e-c69d07cf58e2
+//# sourceMappingURL=cc73fe548c1d068f.js.map

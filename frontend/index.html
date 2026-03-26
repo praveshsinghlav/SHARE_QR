@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Drive File Sharer</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      #files {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin: 20px 0;
+      }
+      #selectedFiles {
+        list-style: none;
+        padding: 0;
+      }
+      #selectedFiles li {
+        background: #e3f2fd;
+        margin: 5px 0;
+        padding: 8px;
+        border-radius: 4px;
+      }
+      button {
+        padding: 10px 20px;
+        margin: 10px 5px 10px 0;
+        background: #4285f4;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+      input {
+        padding: 10px;
+        margin: 10px 5px 10px 0;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>🚀 Google Drive QR File Sharer</h1>
+    <div id="status">Initializing...</div>
+    <button id="auth" style="display: none">🔐 Sign in with Google</button>
+
+    <h3>All Drive Files:</h3>
+    <div id="files">Please sign in to load files...</div>
+
+    <h3>Create Access QR:</h3>
+    <form id="adminForm">
+      <input id="name" placeholder="Full Name" required />
+      <input id="email" type="email" placeholder="Email" required />
+      <br />
+      <button type="button" id="pickerBtn" disabled>📁 Select Files</button>
+      <ul id="selectedFiles"></ul>
+      <br />
+      <button type="submit" id="generateBtn" disabled>✅ Generate QR</button>
+    </form>
+
+    <div id="qrcode"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+      const CLIENT_ID =
+        "183742201069-l6i5uqhtl37pad71lpr0k16a2pqcf3of.apps.googleusercontent.com";
+      const API_KEY = "AIzaSyADu9aA5KNVh-D25D6PtLCyRuQ15ODvUEc";
+      const PROJECT_NUMBER = "183742201069";
+      const DISCOVERY_DOC =
+        "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest";
+      const SCOPES = "https://www.googleapis.com/auth/drive.readonly";
+      const API_BASE = "http://localhost:3000";
+
+      let tokenClient;
+      let accessToken = null;
+      let selectedFileIds = [];
+
+      // Load Google API
+      function gapiLoaded() {
+        gapi.load("client:picker", async () => {
+          await gapi.client.init({
+            apiKey: API_KEY,
+            discoveryDocs: [DISCOVERY_DOC],
+          });
+          window.gapiInited = true;
+          checkReady();
+        });
+      }
+
+      // Load Google Identity
+      function gisLoaded() {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          callback: async (resp) => {
+            if (resp.error) {
+              console.error(resp);
+              return;
+            }
+
+            accessToken = resp.access_token;
+            gapi.client.setToken({ access_token: accessToken });
+
+            document.getElementById("status").innerText =
+              "✅ Signed in successfully!";
+            document.getElementById("pickerBtn").disabled = false;
+
+            await loadFiles();
+          },
+        });
+
+        window.gisInited = true;
+        checkReady();
+      }
+
+      function checkReady() {
+        if (window.gapiInited && window.gisInited) {
+          document.getElementById("auth").style.display = "inline-block";
+          document.getElementById("status").innerText = "Ready to sign in";
+        }
+      }
+
+      document.getElementById("auth").onclick = () => {
+        tokenClient.requestAccessToken({ prompt: "consent" });
+      };
+
+      // ✅ Updated Picker Creation
+      function createPicker() {
+        if (!accessToken) {
+          alert("Please sign in first");
+          return;
+        }
+
+        const view = new google.picker.DocsView()
+          .setIncludeFolders(true)
+          .setSelectFolderEnabled(true);
+
+        const picker = new google.picker.PickerBuilder()
+          .addView(view)
+          .setAppId(PROJECT_NUMBER)
+          .setOAuthToken(accessToken)
+          .setDeveloperKey(API_KEY)
+          .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+          .setCallback(pickerCallback)
+          .build();
+
+        picker.setVisible(true);
+      }
+
+      document.getElementById("pickerBtn").onclick = () => {
+        createPicker();
+      };
+
+      function pickerCallback(data) {
+        console.log("Picker callback:", data);
+
+        if (data.action === google.picker.Action.PICKED) {
+          selectedFileIds = data.docs.map((doc) => doc.id);
+
+          document.getElementById("selectedFiles").innerHTML = selectedFileIds
+            .map((id) => `<li>${id}</li>`)
+            .join("");
+
+          document.getElementById("generateBtn").disabled = false;
+        }
+      }
+
+      async function loadFiles() {
+        const response = await gapi.client.drive.files.list({
+          pageSize: 20,
+          fields: "files(id,name)",
+        });
+
+        const files = response.result.files;
+
+        document.getElementById("files").innerHTML = files
+          .map((f) => `<div>${f.name}</div>`)
+          .join("");
+      }
+
+      document.getElementById("adminForm").onsubmit = async (e) => {
+        e.preventDefault();
+
+        const name = document.getElementById("name").value;
+        const email = document.getElementById("email").value;
+
+        await fetch(`${API_BASE}/api/save-access`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, files: selectedFileIds }),
+        });
+
+        const token = btoa(
+          JSON.stringify({ name, email, files: selectedFileIds })
+        );
+
+        const qrUrl = `${window.location.origin}/access.html#${token}`;
+
+        document.getElementById("qrcode").innerHTML = "";
+
+        // create a canvas manually
+        const canvas = document.createElement("canvas");
+        document.getElementById("qrcode").innerHTML = "";
+
+        new QRCode(document.getElementById("qrcode"), {
+          text: qrUrl,
+          width: 200,
+          height: 200,
+        });
+      };
+    </script>
+
+    <script
+      src="https://accounts.google.com/gsi/client"
+      async
+      defer
+      onload="gisLoaded()"
+    ></script>
+    <script src="https://apis.google.com/js/api.js?onload=gapiLoaded"></script>
+    <script src="https://apis.google.com/js/picker.js"></script>
+  </body>
+</html>
